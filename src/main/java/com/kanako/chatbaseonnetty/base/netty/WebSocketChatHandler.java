@@ -65,6 +65,14 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         handleDestroy(ctx);
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("type", "STATUS");
+        jsonObject.put("sender", "System");
+        jsonObject.put("userId", userId);
+        jsonObject.put("data", "leave");
+        jsonObject.put("timestamp", new Date());
+        jsonObject.put("currentUsers", USER_CHANNEL_MAP.keySet());
+        broadcastAllChannels(jsonObject.toString());
     }
 
     @Override
@@ -90,17 +98,19 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("type", "STATUS");
             jsonObject.put("sender", "System");
+            jsonObject.put("userId", userId);
             jsonObject.put("data", "join");
             jsonObject.put("timestamp", new Date());
             jsonObject.put("currentUsers", USER_CHANNEL_MAP.keySet());
-            channel.writeAndFlush(new TextWebSocketFrame(jsonObject.toString())).addListener(future -> {
+            /*channel.writeAndFlush(new TextWebSocketFrame(jsonObject.toString())).addListener(future -> {
                 if (future.isSuccess()) {
                     log.info("{} has been sent to the server", channel.remoteAddress());
                 } else {
                     log.error("Failed to send message to the server", future.cause());
                 }
-            });
+            });*/
             channels.add(channel);
+            broadcastAllChannels(jsonObject.toString());
         }, 500, TimeUnit.MILLISECONDS);
     }
 

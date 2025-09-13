@@ -60,7 +60,7 @@ export function connectWebSocket(id, wsUrl, onMessage, onOpen, onClose) {
     }
     // 连接错误回调
     socket.onerror = function (error) {
-        alert(error);
+        // alert(error);
         console.error(`WebSocker[${id}]连接错误: `, error);
     }
 
