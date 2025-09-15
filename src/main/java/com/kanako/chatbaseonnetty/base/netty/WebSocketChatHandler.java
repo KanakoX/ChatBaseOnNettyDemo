@@ -1,6 +1,9 @@
 package com.kanako.chatbaseonnetty.base.netty;
 
 import com.alibaba.fastjson2.JSONObject;
+import com.kanako.chatbaseonnetty.user.dao.mapper.UserMapper;
+import com.kanako.chatbaseonnetty.user.pojo.po.UserPO;
+import com.kanako.chatbaseonnetty.user.pojo.vo.UserVO;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -11,6 +14,9 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -18,12 +24,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+@Component
 public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
+    private static UserMapper userMapper;
+
     private static final Logger log = LoggerFactory.getLogger(WebSocketChatHandler.class);
     // 记录管理所有客户端的Channel
     private static final ChannelGroup channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
-    // 存储用户与channel的映射
+    // 存储用户ID与channel的映射
     private static final Map<String, Channel> USER_CHANNEL_MAP = new ConcurrentHashMap<>();
+    // 存储用户ID与UerVO的映射
+    private static final Map<String, UserVO>  USER_VO_MAP = new ConcurrentHashMap<>();
     // 传入的用户ID
     private final String userId;
 
@@ -31,12 +42,21 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
         this.userId = userId;
     }
 
+    public WebSocketChatHandler() {
+        this.userId = null;
+    }
+
+    @Autowired
+    public void setUserMapper(UserMapper userMapper) {
+        WebSocketChatHandler.userMapper = userMapper;
+    }
+
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame msg) throws Exception {
         String text = msg.text();
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("type", "CHAT");
-        jsonObject.put("sender", userId);
+        jsonObject.put("senderInfo", USER_VO_MAP.get(userId));
         jsonObject.put("data", text);
         jsonObject.put("timestamp", new Date());
         broadcastAllChannels(jsonObject.toString());
@@ -64,13 +84,14 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        handleDestroy(ctx);
+        if (userId == null) return;
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("type", "STATUS");
         jsonObject.put("sender", "System");
-        jsonObject.put("userId", userId);
+        jsonObject.put("userInfo", USER_VO_MAP.get(userId));
         jsonObject.put("data", "leave");
         jsonObject.put("timestamp", new Date());
+        handleDestroy(ctx);
         jsonObject.put("currentUsers", USER_CHANNEL_MAP.keySet());
         broadcastAllChannels(jsonObject.toString());
     }
@@ -92,23 +113,18 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
     }
 
     private void handleInit(ChannelHandlerContext ctx) {
+        if (userId == null) return;
         ctx.executor().schedule(() -> {
             Channel channel = ctx.channel();
             USER_CHANNEL_MAP.put(userId, channel);
+            USER_VO_MAP.put(userId, getUserInfo(userId));
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("type", "STATUS");
             jsonObject.put("sender", "System");
-            jsonObject.put("userId", userId);
+            jsonObject.put("userInfo", USER_VO_MAP.get(userId));
             jsonObject.put("data", "join");
             jsonObject.put("timestamp", new Date());
             jsonObject.put("currentUsers", USER_CHANNEL_MAP.keySet());
-            /*channel.writeAndFlush(new TextWebSocketFrame(jsonObject.toString())).addListener(future -> {
-                if (future.isSuccess()) {
-                    log.info("{} has been sent to the server", channel.remoteAddress());
-                } else {
-                    log.error("Failed to send message to the server", future.cause());
-                }
-            });*/
             channels.add(channel);
             broadcastAllChannels(jsonObject.toString());
         }, 500, TimeUnit.MILLISECONDS);
@@ -117,6 +133,7 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
     private void handleDestroy(ChannelHandlerContext ctx) throws Exception {
         Channel channel = ctx.channel();
         USER_CHANNEL_MAP.remove(userId);
+        USER_VO_MAP.remove(userId);
         channels.remove(channel);
     }
 
@@ -124,5 +141,13 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
         for (Channel  channel : channels) {
             channel.writeAndFlush(new TextWebSocketFrame(message));
         }
+    }
+
+    private UserVO getUserInfo(String userId) {
+        UserPO userPO = userMapper.selectById(userId);
+        if (userPO == null) return null;
+        UserVO userVO = new UserVO();
+        BeanUtils.copyProperties(userPO, userVO);
+        return userVO;
     }
 }

@@ -1,9 +1,10 @@
 <script setup>
 import {nextTick, onMounted, ref, watch} from "vue";
-import {connectWebSocket, sendMessage} from "@/utils/websocket";
-import {dateFormat} from "../utils/MyUtils";
+import {closeWebSocket, connectWebSocket, sendMessage} from "@/utils/websocket";
+import {dateFormat} from "@/utils/MyUtils";
+import axios from "axios";
 
-const userId = "Kanako";
+const username = ref("未登录");
 
 // 输入框内容
 const chatEditText = ref("");
@@ -17,6 +18,15 @@ const onlineCount = ref(0);
 // 绑定聊天滚动区域
 const bindChatScrollZone = ref();
 
+// 登录注册参数
+const params = ref({
+  username: "",
+  password: ""
+});
+
+// cover组件是否可见
+const isCoverVisible = ref(true);
+
 // 发送
 const submit = () => {
   sendMessage(1, chatEditText.value);
@@ -24,6 +34,19 @@ const submit = () => {
 }
 
 onMounted(() => {
+  // console.log(getUser());
+  // 用户有登录记录
+  if (getUser()) {
+    isCoverVisible.value = false;
+    connectws(getUser().id);
+    nextTick(() => {
+      username.value = getUser().username;
+    });
+  }
+});
+
+// 连接WebSocket
+const connectws = (userId) => {
   connectWebSocket(
       1,
       `${WS_BASE_URL}/chat?userId=${userId}`,
@@ -38,7 +61,7 @@ onMounted(() => {
         if (dataObject.currentUsers) onlineCount.value = dataObject.currentUsers.length;
       }
   );
-});
+}
 
 // 判断是否为状态消息
 const isStatusMessage = (item) => {
@@ -47,8 +70,8 @@ const isStatusMessage = (item) => {
 
 // 判断是否为自己的消息
 const isMyselfMessage = (item) => {
-  console.log(item.sender === userId)
-  return item.sender === userId;
+  // console.log(item.senderInfo.username, username)
+  return item.senderInfo.username === username.value;
 }
 
 // 滚动到底部
@@ -64,10 +87,11 @@ const scrollToBottom = async () => {
 
 // 处理状态信息
 const handleStatusMessage = (item) => {
-  const userId = item.userId;
+  // console.log(item)
+  const username = item.userInfo.username;
   const status = item.data;
-  if (status === "join") return `${userId} 进入聊天室`;
-  return `${userId} 离开聊天室`;
+  if (status === "join") return `${username} 进入聊天室`;
+  return `${username} 离开聊天室`;
 }
 
 // 监听allMessages变化，自动保存
@@ -75,14 +99,66 @@ watch(allMessages, () => {
   scrollToBottom();
 }, { deep: true });
 
+// 登录按钮
+const loginBtn = async () => {
+  const response = await axios.post(`${HTTP_BASE_URL}/user/login`, params.value);
+  if (response.data.code === 200) {
+    // console.log(response.data.data);
+    localStorage.setItem("user", JSON.stringify(response.data.data));
+    username.value = response.data.data.username
+    isCoverVisible.value = false;
+    connectws(response.data.data.id);
+    params.value = {username: "", password: ""};
+  } else {
+    alert(response.data.message);
+  }
+}
+
+// 注册按钮
+const registerBtn = async () => {
+  const response = await axios.post(`${HTTP_BASE_URL}/user/register`, params.value);
+  if (response.data.code === 200) {
+    alert("成功");
+  } else {
+    alert(response.data.message);
+  }
+}
+
+// 退出登录
+const logout = () => {
+  localStorage.removeItem("user");
+  isCoverVisible.value = true;
+  closeWebSocket(1);
+  username.value = "未登录";
+}
+
 </script>
 
 <template>
   <div class="body">
+
+    <div class="cover" v-if="isCoverVisible">
+      <div class="login-card">
+        <div class="input-group">
+          <label for="username">用户名: </label>
+          <input type="text" id="username" v-model="params.username">
+        </div>
+        <div class="input-group">
+          <label for="password">密码: </label>
+          <input type="password" id="password" v-model="params.password">
+        </div>
+        <div class="button-container">
+          <button @click="loginBtn">登录</button>
+          <button @click="registerBtn" style="margin-left: 50px">注册</button>
+        </div>
+      </div>
+    </div>
+
     <div class="chat-container">
 <!--      header -->
       <div class="chat-header">
         <span>当前在线人数 ({{ onlineCount }})</span>
+        <span class="user" @click="logout">{{ username }}</span>
       </div>
 
 <!--      scrollable -->
@@ -99,7 +175,7 @@ watch(allMessages, () => {
               <div class="info">
                 <div class="content">{{ item.data }}</div>
                 <div class="extra">
-                  <span>{{ item.sender }}</span>
+                  <span>{{ item.senderInfo.username }}</span>
                   <span>{{ dateFormat(item.timestamp) }}</span>
                 </div>
               </div>
@@ -134,6 +210,73 @@ watch(allMessages, () => {
   padding: 0 10px;
 }
 
+.cover {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  background: rgba(243, 244, 245, .5);
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 20px 0 rgba(0, 0, 0, .3);
+}
+
+.login-card .input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  label {
+    width: 80px;
+    text-align: right;
+    padding-right: 15px;
+    color: #555;
+    font-size: 16px;
+  }
+  input {
+    flex: 1;
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    outline: none;
+  }
+  input:focus {
+    border-color: #00ffff;
+    box-shadow: 2px 2px 20px 0 rgb(0, 255, 255, .2);
+  }
+}
+
+.button-container {
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  button {
+    background-color: #4a86e8;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color .3s;
+  }
+  button:hover {
+    background-color: #3a76d8;
+  }
+}
+
 .chat-container {
   position: relative;
   width: 100%;
@@ -156,6 +299,13 @@ watch(allMessages, () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.chat-header .user {
+  position: absolute;
+  right: 10px;
+  font-size: 16px;
+  cursor: pointer;
 }
 
 .chat-header span {
