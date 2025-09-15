@@ -26,7 +26,7 @@ const submit = () => {
 onMounted(() => {
   connectWebSocket(
       1,
-      `ws://localhost:8081/ws/chat?userId=${userId}`,
+      `${WS_BASE_URL}/chat?userId=${userId}`,
       (message) => {
         const dataObject = JSON.parse(message);
         if (!dataObject.timestamp) dataObject.timestamp = new Date();
@@ -34,7 +34,7 @@ onMounted(() => {
         allMessages.value.sort((a, b) => {
           return new Date(a.timestamp) - new Date(b.timestamp);
         });
-        console.log(allMessages.value)
+        // console.log(allMessages.value)
         if (dataObject.currentUsers) onlineCount.value = dataObject.currentUsers.length;
       }
   );

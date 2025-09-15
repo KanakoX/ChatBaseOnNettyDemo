@@ -27,6 +27,7 @@ export function connectWebSocket(id, wsUrl, onMessage, onOpen, onClose) {
     try {
         socket = new WebSocket(wsUrl);
     } catch (e) {
+        alert(e)
         socket = new WebSocket(`${wsProtocol}//${window.location.host}${wsUrl}`);
     }
     // 保存配置

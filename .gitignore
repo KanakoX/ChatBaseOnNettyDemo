@@ -34,3 +34,6 @@ build/
 
 ### Security ###
 src/main/resources/application-dev.yml
+src/main/resources/application-pro.yml
+/web-ui/.env.development
+/web-ui/.env.production
