@@ -12,6 +12,10 @@ spring:
       enableEscaping: true
   profiles:
     active: dev
+  data:
+    redis:
+      host: ${database.redisHost}
+      port: 6379
 server:
   servlet:
     context-path: /api
