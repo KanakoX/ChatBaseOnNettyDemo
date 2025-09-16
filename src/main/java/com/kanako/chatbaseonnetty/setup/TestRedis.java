@@ -19,6 +19,6 @@ public class TestRedis implements ApplicationRunner {
         UserPO userPO = new UserPO();
         userPO.setUsername("kanako");
         userPO.setPassword("123456");
-        ops.set("kanako", userPO);
+//        ops.set("kanako", userPO);
     }
 }

@@ -1,6 +1,8 @@
 package com.kanako.chatbaseonnetty.base.netty;
 
 import com.alibaba.fastjson2.JSONObject;
+import com.kanako.chatbaseonnetty.chat.pojo.po.ChatMessage;
+import com.kanako.chatbaseonnetty.chat.service.ChatHistoryService;
 import com.kanako.chatbaseonnetty.user.dao.mapper.UserMapper;
 import com.kanako.chatbaseonnetty.user.pojo.po.UserPO;
 import com.kanako.chatbaseonnetty.user.pojo.vo.UserVO;
@@ -18,14 +20,15 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Component
 public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
+
+
+    private static ChatHistoryService chatHistoryService;
     private static UserMapper userMapper;
 
     private static final Logger log = LoggerFactory.getLogger(WebSocketChatHandler.class);
@@ -50,10 +53,24 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
     public void setUserMapper(UserMapper userMapper) {
         WebSocketChatHandler.userMapper = userMapper;
     }
+    @Autowired
+    public void setChatHistoryService(ChatHistoryService chatHistoryService) {
+        WebSocketChatHandler.chatHistoryService = chatHistoryService;
+    }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame msg) throws Exception {
         String text = msg.text();
+
+        // 创建消息对象
+        ChatMessage chatMessage = new ChatMessage();
+        chatMessage.setSenderInfo(USER_VO_MAP.get(userId));
+        chatMessage.setContent(text);
+        chatMessage.setCreatedAt(new Date());
+        // 保存到Redis
+        chatHistoryService.saveMessage(chatMessage);
+
+        // 广播消息
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("type", "CHAT");
         jsonObject.put("senderInfo", USER_VO_MAP.get(userId));
@@ -116,6 +133,16 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
         if (userId == null) return;
         ctx.executor().schedule(() -> {
             Channel channel = ctx.channel();
+
+            // 获取并发送历史消息
+            List<ChatMessage> list = chatHistoryService.getHistoryMessages("room1");
+            if (list != null && !list.isEmpty()) {
+                JSONObject historyJsonObject = new JSONObject();
+                historyJsonObject.put("type", "HISTORY");
+                historyJsonObject.put("data", list);
+                channel.writeAndFlush(new TextWebSocketFrame(historyJsonObject.toString()));
+            }
+
             USER_CHANNEL_MAP.put(userId, channel);
             USER_VO_MAP.put(userId, getUserInfo(userId));
             JSONObject jsonObject = new JSONObject();
@@ -138,7 +165,7 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
     }
 
     private void broadcastAllChannels(String message) {
-        for (Channel  channel : channels) {
+        for (Channel channel : channels) {
             channel.writeAndFlush(new TextWebSocketFrame(message));
         }
     }

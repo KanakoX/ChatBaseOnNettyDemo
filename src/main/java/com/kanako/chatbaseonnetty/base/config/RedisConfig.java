@@ -1,4 +1,4 @@
-package com.kanako.chatbaseonnetty.config;
+package com.kanako.chatbaseonnetty.base.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

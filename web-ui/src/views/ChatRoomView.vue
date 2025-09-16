@@ -1,5 +1,5 @@
 <script setup>
-import {nextTick, onMounted, ref, watch} from "vue";
+import {nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {closeWebSocket, connectWebSocket, sendMessage} from "@/utils/websocket";
 import {dateFormat} from "@/utils/MyUtils";
 import axios from "axios";
@@ -68,6 +68,11 @@ const isStatusMessage = (item) => {
   return item.type === "STATUS";
 }
 
+// 判断是否为正在聊天消息
+const isChattingMessage = (item) => {
+  return item.type === "CHAT";
+}
+
 // 判断是否为自己的消息
 const isMyselfMessage = (item) => {
   // console.log(item.senderInfo.username, username)
@@ -132,6 +137,10 @@ const logout = () => {
   username.value = "未登录";
 }
 
+onUnmounted(() => {
+  closeWebSocket(1);
+});
+
 </script>
 
 <template>
@@ -171,12 +180,22 @@ const logout = () => {
               {{ handleStatusMessage(item) }}
             </li>
 
-            <li v-else class="chat-item" :class="{'isMyself': isMyselfMessage(item)}">
+            <li v-else-if="isChattingMessage(item)" class="chat-item" :class="{'isMyself': isMyselfMessage(item)}">
               <div class="info">
                 <div class="content">{{ item.data }}</div>
                 <div class="extra">
                   <span>{{ item.senderInfo.username }}</span>
                   <span>{{ dateFormat(item.timestamp) }}</span>
+                </div>
+              </div>
+            </li>
+
+            <li v-else v-for="historyItem in item.data" class="chat-item" :class="{'isMyself': isMyselfMessage(historyItem)}">
+              <div class="info">
+                <div class="content">{{ historyItem.content }}</div>
+                <div class="extra">
+                  <span>{{ historyItem.senderInfo.username }}</span>
+                  <span>{{ dateFormat(historyItem.createdAt) }}</span>
                 </div>
               </div>
             </li>
