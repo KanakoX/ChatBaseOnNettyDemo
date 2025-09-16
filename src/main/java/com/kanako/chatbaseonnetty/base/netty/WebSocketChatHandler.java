@@ -60,6 +60,7 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame msg) throws Exception {
+        if (userId == null) throw new RuntimeException("用户发生错误");
         String text = msg.text();
 
         // 创建消息对象
@@ -140,6 +141,7 @@ public class WebSocketChatHandler extends SimpleChannelInboundHandler<TextWebSoc
                 JSONObject historyJsonObject = new JSONObject();
                 historyJsonObject.put("type", "HISTORY");
                 historyJsonObject.put("data", list);
+                historyJsonObject.put("timestamp", new Date());
                 channel.writeAndFlush(new TextWebSocketFrame(historyJsonObject.toString()));
             }
 

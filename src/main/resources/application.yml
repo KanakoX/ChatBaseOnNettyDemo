@@ -11,7 +11,7 @@ spring:
     parameters:
       enableEscaping: true
   profiles:
-    active: dev
+    active: pro
   data:
     redis:
       host: ${database.redisHost}

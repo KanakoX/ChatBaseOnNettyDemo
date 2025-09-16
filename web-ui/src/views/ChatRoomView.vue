@@ -18,6 +18,9 @@ const onlineCount = ref(0);
 // 绑定聊天滚动区域
 const bindChatScrollZone = ref();
 
+// WebSocket连接flag
+const isWSConnected = ref(false);
+
 // 登录注册参数
 const params = ref({
   username: "",
@@ -29,11 +32,13 @@ const isCoverVisible = ref(true);
 
 // 发送
 const submit = () => {
+  if (!chatEditText.value || chatEditText.value === "") return;
   sendMessage(1, chatEditText.value);
   chatEditText.value = "";
 }
 
 onMounted(() => {
+  // console.log(getUserTimeZone());
   // console.log(getUser());
   // 用户有登录记录
   if (getUser()) {
@@ -51,16 +56,24 @@ const connectws = (userId) => {
       1,
       `${WS_BASE_URL}/chat?userId=${userId}`,
       (message) => {
-        const dataObject = JSON.parse(message);
-        if (!dataObject.timestamp) dataObject.timestamp = new Date();
-        allMessages.value.push(dataObject);
-        allMessages.value.sort((a, b) => {
-          return new Date(a.timestamp) - new Date(b.timestamp);
-        });
-        // console.log(allMessages.value)
-        if (dataObject.currentUsers) onlineCount.value = dataObject.currentUsers.length;
+        handleReceiveMessage(message);
+      },
+      () => {
+        isWSConnected.value = true;
       }
   );
+}
+
+// 处理接收消息
+const handleReceiveMessage = (message) => {
+  const dataObject = JSON.parse(message);
+  if (!dataObject.timestamp) dataObject.timestamp = new Date();
+  allMessages.value.push(dataObject);
+  allMessages.value.sort((a, b) => {
+    return new Date(a.timestamp) - new Date(b.timestamp);
+  });
+  // console.log(allMessages.value)
+  if (dataObject.currentUsers) onlineCount.value = dataObject.currentUsers.length;
 }
 
 // 判断是否为状态消息
@@ -75,7 +88,7 @@ const isChattingMessage = (item) => {
 
 // 判断是否为自己的消息
 const isMyselfMessage = (item) => {
-  // console.log(item.senderInfo.username, username)
+  console.log(item);
   return item.senderInfo.username === username.value;
 }
 
@@ -109,7 +122,7 @@ const loginBtn = async () => {
   const response = await axios.post(`${HTTP_BASE_URL}/user/login`, params.value);
   if (response.data.code === 200) {
     // console.log(response.data.data);
-    localStorage.setItem("user", JSON.stringify(response.data.data));
+    localStorage.setItem(USER_INFO, JSON.stringify(response.data.data));
     username.value = response.data.data.username
     isCoverVisible.value = false;
     connectws(response.data.data.id);
@@ -131,7 +144,7 @@ const registerBtn = async () => {
 
 // 退出登录
 const logout = () => {
-  localStorage.removeItem("user");
+  localStorage.removeItem(USER_INFO);
   isCoverVisible.value = true;
   closeWebSocket(1);
   username.value = "未登录";
@@ -162,6 +175,8 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <div class="cover" style="z-index: 99" v-if="isWSConnected === false"></div>
 
     <div class="chat-container">
 <!--      header -->
@@ -205,7 +220,7 @@ onUnmounted(() => {
 
 <!--      input submit area-->
       <div class="chat-input-box">
-        <input type="text" v-model="chatEditText">
+        <input type="text" v-model="chatEditText" @keydown.enter="submit">
         <button @click="submit">发送</button>
       </div>
     </div>
